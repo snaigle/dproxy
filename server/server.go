@@ -70,7 +70,7 @@ func handleSocks5Connection(conn net.Conn) {
 			conn.Close()
 		}
 	}()
-	var err = handshake(conn)
+	clientId, err := handshake(conn)
 	if err != nil {
 		log.Println("socks handshake:", err)
 		return
@@ -87,7 +87,7 @@ func handleSocks5Connection(conn net.Conn) {
 		log.Println("send connection confirmation:", err)
 		return
 	}
-	proxy, err := getProxyConn(rawaddr, addr)
+	proxy, err := getProxyConn(rawaddr, addr, clientId)
 	if err != nil {
 		log.Println("failed get proxy connection:", err)
 		return
@@ -103,7 +103,7 @@ func handleSocks5Connection(conn net.Conn) {
 	log.Println("closed connection to", addr)
 }
 
-func handshake(conn net.Conn) (err error) {
+func handshake(conn net.Conn) (clientId string, err error) {
 	const (
 		idVer     = 0
 		idNmethod = 1
@@ -114,7 +114,8 @@ func handshake(conn net.Conn) (err error) {
 		return
 	}
 	if buf[idVer] != socksVer5 {
-		return errVer
+		err = errVer
+		return
 	}
 	nmethod := int(buf[idNmethod])
 	msgLen := nmethod + 2
@@ -125,12 +126,16 @@ func handshake(conn net.Conn) (err error) {
 			return
 		}
 	} else {
-		return errAuthExtraData
+		err = errAuthExtraData
+		return
 	}
 	log.Println("methods:", buf[idNmethod+1])
 	// no authentication required
 	// todo 这里需要改成user password auth
 	_, err = conn.Write([]byte{socksVer5, 0})
+	if err == nil {
+		clientId = "abcd"
+	}
 	return
 }
 
@@ -197,7 +202,7 @@ func getRequest(conn net.Conn) (rawaddr []byte, host string, err error) {
 	return
 }
 
-func getProxyConn(rawaddr []byte, host string) (conn net.Conn, err error) {
+func getProxyConn(rawaddr []byte, host string, clientId string) (conn net.Conn, err error) {
 	conn, err = net.Dial("tcp", host)
 	return
 }

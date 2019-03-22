@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/snaigle/dproxy/msg"
-	"github.com/snaigle/dproxy/util"
 	"io"
 	"log"
 	"net"
@@ -53,7 +52,8 @@ func newControl(ctlConn net.Conn, authMsg *msg.Auth) {
 		proxies:  make(chan net.Conn, 10),
 		lastPing: time.Now(),
 	}
-	c.id = util.RandString(16)
+	//c.id = util.RandString(16)
+	c.id = "abcd"
 	if replaced := controlRegistry.Add(c.id, c); replaced != nil {
 		log.Println("control is same :", c.id)
 	}
@@ -141,10 +141,12 @@ func (c *Control) manager() {
 				return
 			}
 
-			switch _ := mRaw.(type) {
+			switch m := mRaw.(type) {
 			case *msg.Ping:
 				c.lastPing = time.Now()
 				c.out <- &msg.Pong{}
+			default:
+				log.Println("msg type:", m)
 			}
 		}
 	}
