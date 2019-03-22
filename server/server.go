@@ -59,11 +59,11 @@ func listenSocks(listenAddr string) {
 			log.Println("accept:", err)
 			continue
 		}
-		go handleConnection(conn)
+		go handleSocks5Connection(conn)
 	}
 }
 
-func handleConnection(conn net.Conn) {
+func handleSocks5Connection(conn net.Conn) {
 	closed := false
 	defer func() {
 		if !closed {
@@ -127,6 +127,7 @@ func handshake(conn net.Conn) (err error) {
 	} else {
 		return errAuthExtraData
 	}
+	log.Println("methods:", buf[idNmethod+1])
 	// no authentication required
 	// todo 这里需要改成user password auth
 	_, err = conn.Write([]byte{socksVer5, 0})
