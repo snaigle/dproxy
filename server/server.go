@@ -18,25 +18,30 @@ var (
 	errCmd           = errors.New("socks command not supported")
 )
 
+var (
+	controlRegistry *ControlRegistry
+)
+
 const (
 	socksVer5       = 5
 	socksCmdConnect = 1
 )
 
 func main() {
+	controlRegistry = NewControlRegistry()
 	go listenProxy("127.0.0.1:9090")
 	listenSocks("127.0.0.1:1090")
 }
 
-func listenProxy(listenAddr string)  {
-	ln,err := net.Listen("tcp",listenAddr)
+func listenProxy(listenAddr string) {
+	ln, err := net.Listen("tcp", listenAddr)
 	if err != nil {
 		log.Fatal(err)
 	}
 	for {
-		conn ,err := ln.Accept()
+		conn, err := ln.Accept()
 		if err != nil {
-			log.Println("accept proxy:",err)
+			log.Println("accept proxy:", err)
 			continue
 		}
 		go handleTunnelConnection(conn)
@@ -201,4 +206,3 @@ func pipeThenClose(src, dst net.Conn) {
 	io.Copy(dst, src)
 	return
 }
-
