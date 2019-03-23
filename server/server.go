@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/binary"
 	"errors"
+	"github.com/snaigle/dproxy/msg"
+	"github.com/snaigle/dproxy/util"
 	"io"
 	"log"
 	"net"
@@ -28,8 +30,9 @@ const (
 )
 
 func main() {
+	log.Println("server starting")
 	controlRegistry = NewControlRegistry()
-	go listenProxy("127.0.0.1:9090")
+	go listenProxy("127.0.0.1:1091")
 	listenSocks("127.0.0.1:1090")
 }
 
@@ -38,6 +41,7 @@ func listenProxy(listenAddr string) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	log.Println("listen proxy connection")
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
@@ -53,6 +57,7 @@ func listenSocks(listenAddr string) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	log.Println("listen socks5 connection")
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
@@ -97,8 +102,8 @@ func handleSocks5Connection(conn net.Conn) {
 			proxy.Close()
 		}
 	}()
-	go pipeThenClose(conn, proxy)
-	pipeThenClose(proxy, conn)
+	go util.PipeThenClose(conn, proxy)
+	util.PipeThenClose(proxy, conn)
 	closed = true
 	log.Println("closed connection to", addr)
 }
@@ -203,12 +208,27 @@ func getRequest(conn net.Conn) (rawaddr []byte, host string, err error) {
 }
 
 func getProxyConn(rawaddr []byte, host string, clientId string) (conn net.Conn, err error) {
-	conn, err = net.Dial("tcp", host)
-	return
-}
-
-func pipeThenClose(src, dst net.Conn) {
-	defer dst.Close()
-	io.Copy(dst, src)
+	ctl := controlRegistry.Get(clientId)
+	if ctl == nil {
+		log.Println("control is not found:", clientId)
+		err = errors.New("control is not found")
+		return
+	}
+	for i := 0; i < proxyMaxPoolSize; i++ {
+		conn, err = ctl.GetProxy()
+		if err != nil {
+			log.Println("Failed to get proxy connection ", err)
+			return
+		}
+		startProxyMsg := &msg.StartProxy{
+			ClientAddr: host,
+		}
+		if err = msg.WriteMsg(conn, startProxyMsg); err != nil {
+			log.Printf("Failed to write start-proxy-message: %v, attempt %d", err, i)
+			conn.Close()
+		} else {
+			break
+		}
+	}
 	return
 }

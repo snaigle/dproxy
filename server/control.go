@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"github.com/snaigle/dproxy/msg"
+	"github.com/snaigle/dproxy/util"
 	"io"
 	"log"
 	"net"
@@ -150,6 +152,45 @@ func (c *Control) manager() {
 			}
 		}
 	}
+}
+
+func (c *Control) GetProxy() (proxyConn net.Conn, err error) {
+	var ok bool
+
+	// get a proxy connection from the pool
+	select {
+	case proxyConn, ok = <-c.proxies:
+		if !ok {
+			err = fmt.Errorf("No proxy connections available, control is closing")
+			return
+		}
+	default:
+		// no proxy available in the pool, ask for one over the control channel
+		log.Println("No proxy in pool, requesting proxy from control . . .")
+		err = util.PanicToError(func() {
+			c.out <- &msg.ReqProxy{}
+			c.out <- &msg.ReqProxy{}
+			c.out <- &msg.ReqProxy{}
+			c.out <- &msg.ReqProxy{}
+			c.out <- &msg.ReqProxy{}
+		})
+		if err != nil {
+			return
+		}
+
+		select {
+		case proxyConn, ok = <-c.proxies:
+			if !ok {
+				err = fmt.Errorf("No proxy connections available, control is closing")
+				return
+			}
+
+		case <-time.After(pingTimeoutInterval):
+			err = fmt.Errorf("Timeout trying to get proxy connection")
+			return
+		}
+	}
+	return
 }
 
 func newProxy(proxyConn net.Conn, regProxy *msg.RegProxy) {
