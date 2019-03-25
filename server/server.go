@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"github.com/snaigle/dproxy/msg"
 	"github.com/snaigle/dproxy/util"
 	"io"
@@ -12,12 +13,14 @@ import (
 )
 
 var (
-	errAddrType      = errors.New("socks addr type not supported")
-	errVer           = errors.New("socks version not supported")
-	errMethod        = errors.New("socks only support 1 method now")
-	errAuthExtraData = errors.New("socks authentication get extra data")
-	errReqExtraData  = errors.New("socks request get extra data")
-	errCmd           = errors.New("socks command not supported")
+	errAddrType        = errors.New("socks addr type not supported")
+	errVer             = errors.New("socks version not supported")
+	errMethod          = errors.New("socks only support 1 method now")
+	errAuthExtraData   = errors.New("socks authentication get extra data")
+	errAuthMethodError = errors.New("socks authenticate method error")
+	errAuthLengthError = errors.New("socks authenticate legth error")
+	errReqExtraData    = errors.New("socks request get extra data")
+	errCmd             = errors.New("socks command not supported")
 )
 
 var (
@@ -25,8 +28,10 @@ var (
 )
 
 const (
-	socksVer5       = 5
-	socksCmdConnect = 1
+	socksVer5         = 5
+	socksCmdConnect   = 1
+	socksAuthNone     = 0
+	socksAuthUserName = 2
 )
 
 func main() {
@@ -134,13 +139,44 @@ func handshake(conn net.Conn) (clientId string, err error) {
 		err = errAuthExtraData
 		return
 	}
-	log.Println("methods:", buf[idNmethod+1])
+	log.Printf("methods:%v\n", buf[idNmethod+1:msgLen])
 	// no authentication required
-	// todo 这里需要改成user password auth
-	_, err = conn.Write([]byte{socksVer5, 0})
-	if err == nil {
-		clientId = "abcd"
+	// 必须支持username password auth
+	_, err = conn.Write([]byte{socksVer5, socksAuthUserName})
+	authBuf := make([]byte, 67) // username 和password最长为32
+	if n, err = io.ReadAtLeast(conn, authBuf, 2); err != nil {
+		return
 	}
+	fmt.Println("auth version:", authBuf[0])
+	userNameLength := int(authBuf[1])
+	if userNameLength >= 32 {
+		err = errAuthLengthError
+		return
+	}
+	var p int
+	if n < userNameLength+2 {
+		if p, err = io.ReadAtLeast(conn, authBuf[n:], userNameLength+2-n); err != nil {
+			return
+		}
+	}
+	userName := string(authBuf[2 : userNameLength+2])
+	log.Println("auth userName:", userName)
+	var pl int
+	if n+p == userNameLength+2 {
+		if pl, err = io.ReadAtLeast(conn, authBuf[userNameLength+2:], 1); err != nil {
+			return
+		}
+	}
+	passwordLength := int(authBuf[userNameLength+2])
+	if n+p+pl < userNameLength+3+passwordLength {
+		if _, err = io.ReadFull(conn, authBuf[n+p+pl:userNameLength+3+passwordLength]); err != nil {
+			return
+		}
+	}
+	password := string(authBuf[userNameLength+3 : userNameLength+3+passwordLength])
+	log.Println("auth password:", password)
+	clientId = password
+	_, err = conn.Write([]byte{authBuf[0], 0x00})
 	return
 }
 

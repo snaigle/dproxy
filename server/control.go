@@ -54,8 +54,8 @@ func newControl(ctlConn net.Conn, authMsg *msg.Auth) {
 		proxies:  make(chan net.Conn, 10),
 		lastPing: time.Now(),
 	}
-	//c.id = util.RandString(16)
-	c.id = "abcd"
+	c.id = util.RandString(16)
+	log.Println("clientId:", c.id)
 	if replaced := controlRegistry.Add(c.id, c); replaced != nil {
 		log.Println("control is same :", c.id)
 	}
