@@ -19,7 +19,6 @@ func main() {
 	}()
 
 	log.Println("start user")
-
 	var myClient *http.Client
 	socksUrl, _ := url.Parse(fmt.Sprintf("socks5://mucang:%v@127.0.0.1:1090", "1f7b169c846f218a"))
 	dialer, _ := proxy.FromURL(socksUrl, &net.Dialer{
