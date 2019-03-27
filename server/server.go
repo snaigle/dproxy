@@ -39,6 +39,7 @@ func main() {
 	controlRegistry = NewControlRegistry()
 	go listenProxy("127.0.0.1:1091")
 	listenSocks("127.0.0.1:1090")
+	// todo 还需要有个query 接口(这里可以将clientId相关数据存到db或cache,然后server就可以支持分布式部署了)
 }
 
 func listenProxy(listenAddr string) {
