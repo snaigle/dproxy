@@ -37,7 +37,8 @@ func main() {
 	}
 	defer ctlConn.Close()
 	auth := &msg.Auth{
-		User: "authToken",
+		Token:    "authToken",
+		CityCode: "110000",
 	}
 	if err = msg.WriteMsg(ctlConn, auth); err != nil {
 		panic(err)

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/snaigle/dproxy/msg"
@@ -9,7 +10,9 @@ import (
 	"io"
 	"log"
 	"net"
+	"net/http"
 	"strconv"
+	"time"
 )
 
 var (
@@ -28,21 +31,58 @@ var (
 )
 
 const (
-	socksVer5         = 5
-	socksCmdConnect   = 1
-	socksAuthNone     = 0
-	socksAuthUserName = 2
+	socksVer5                       = 5
+	socksCmdConnect                 = 1
+	socksAuthNone                   = 0
+	socksAuthUserName               = 2
+	connReadTimeout   time.Duration = 10 * time.Second
 )
 
 func main() {
 	log.Println("server starting")
 	controlRegistry = NewControlRegistry()
-	go listenProxy("127.0.0.1:1091")
-	listenSocks("127.0.0.1:1090")
-	// todo 还需要有个query 接口(这里可以将clientId相关数据存到db或cache,然后server就可以支持分布式部署了)
+	go listenTunnel("127.0.0.1:1091")
+	go listenSocks("127.0.0.1:1090")
+	http.HandleFunc("/", func(resp http.ResponseWriter, req *http.Request) {
+		defer func() {
+			if r := recover(); r != nil {
+				resp.WriteHeader(http.StatusInternalServerError)
+				resp.Write([]byte("error from server"))
+			}
+		}()
+		cityCode := req.URL.Query().Get("cityCode")
+		if cityCode == "" {
+			renderJson(&resp, 200, map[string]interface{}{"success": true, "message": "城市为空"})
+		} else {
+			var clientId string
+			controlRegistry.Foreach(func(control *Control) bool {
+				if control.auth.CityCode == cityCode {
+					clientId = control.id
+					return true
+				}
+				return false
+			})
+			if clientId == "" {
+				renderJson(&resp, 200, map[string]interface{}{"success": true, "data": clientId})
+			} else {
+				renderJson(&resp, 200, map[string]interface{}{"success": false, "message": "not has proxy of city"})
+			}
+		}
+	})
+	http.ListenAndServe("127.0.0.1:9090", nil)
 }
 
-func listenProxy(listenAddr string) {
+func renderJson(resp *http.ResponseWriter, code int, data interface{}) {
+	(*resp).Header().Set("Content-Type", "application/json; charset=UTF-8")
+	(*resp).WriteHeader(code)
+	b, err := json.Marshal(data)
+	if err != nil {
+		panic(err)
+	}
+	(*resp).Write(b)
+}
+
+func listenTunnel(listenAddr string) {
 	ln, err := net.Listen("tcp", listenAddr)
 	if err != nil {
 		log.Fatal(err)

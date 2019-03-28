@@ -54,6 +54,11 @@ func newControl(ctlConn net.Conn, authMsg *msg.Auth) {
 		proxies:  make(chan net.Conn, 10),
 		lastPing: time.Now(),
 	}
+	// todo auth token
+	log.Printf("auth info:%v\n", authMsg)
+	if authMsg.CityCode == "" {
+		panic("auth error: cityCode could't be empty")
+	}
 	c.id = util.RandString(16)
 	log.Println("clientId:", c.id)
 	if replaced := controlRegistry.Add(c.id, c); replaced != nil {

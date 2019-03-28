@@ -32,6 +32,17 @@ func (r *ControlRegistry) Add(clientId string, ctl *Control) (oldCtl *Control) {
 	return
 }
 
+func (r *ControlRegistry) Foreach(f func(*Control) bool) {
+	r.RLock()
+	defer r.RUnlock()
+	for _, v := range r.controls {
+		if f(v) {
+			break
+		}
+	}
+
+}
+
 func (r *ControlRegistry) Del(clientId string) {
 	r.Lock()
 	defer r.Unlock()
